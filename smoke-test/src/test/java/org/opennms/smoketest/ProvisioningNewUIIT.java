@@ -30,8 +30,8 @@ package org.opennms.smoketest;
 
 import static org.awaitility.Awaitility.await;
 import static org.openqa.selenium.support.ui.ExpectedConditions.elementToBeClickable;
-import static org.openqa.selenium.support.ui.ExpectedConditions.not;
 import static org.openqa.selenium.support.ui.ExpectedConditions.invisibilityOfElementLocated;
+import static org.openqa.selenium.support.ui.ExpectedConditions.not;
 import static org.openqa.selenium.support.ui.ExpectedConditions.visibilityOfElementLocated;
 
 import java.util.concurrent.TimeUnit;
@@ -45,6 +45,8 @@ import org.openqa.selenium.Keys;
 import org.openqa.selenium.NoSuchElementException;
 import org.openqa.selenium.StaleElementReferenceException;
 import org.openqa.selenium.WebElement;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * The Test Class for the New Provisioning UI using AngularJS.
@@ -54,6 +56,7 @@ import org.openqa.selenium.WebElement;
  * @author <a href="mailto:agalue@opennms.org">Alejandro Galue</a>
  */
 public class ProvisioningNewUIIT extends OpenNMSSeleniumIT {
+    private static final Logger LOG = LoggerFactory.getLogger(ProvisioningNewUIIT.class);
     private static final String NODE_LABEL = "localNode";
     private static final String NODE_FOREIGNID = "localNode";
     private static final String NODE_IPADDR = "127.0.0.1";
@@ -313,5 +316,56 @@ public class ProvisioningNewUIIT extends OpenNMSSeleniumIT {
     protected WebElement findModal() {
         final String xpath = "//div[contains(@class, 'modal-dialog')]";
         return wait.until(visibilityOfElementLocated(By.xpath(xpath)));
+    }
+
+    @Test
+    public void testIllegalCharacters() throws Exception {
+        testRequisitionName("SmokeTest-Req<b>ui</b>sition", true);
+        testRequisitionName("SmokeTest-Req'uisition", true);
+        testRequisitionName("SmokeTest-Req\"uisition", true);
+        testRequisitionName("SmokeTest-Req&uisition", true);
+        testRequisitionName("SmokeTest-Requisition", false);
+
+        testNodeLabel("node<b>La</b>bel", true);
+        testNodeLabel("node'Label", true);
+        testNodeLabel("node\"Label", true);
+        testNodeLabel("node&Label", true);
+        testNodeLabel("nodeLabel", false);
+
+        deleteExistingRequisition("SmokeTest-Requisition");
+    }
+
+    private void testNodeLabel(final String nodeLabel, final boolean mustFail) throws Exception {
+        provisioningPage();
+        clickId("quick-add-node", false);
+        wait.until(visibilityOfElementLocated(By.xpath("//div[contains(@class, 'modal-dialog')]")));
+        enterText(By.id("nodeLabel"), nodeLabel);
+        if (mustFail) {
+            findElementByXpath("//input[@id='nodeLabel' and contains(@class,'ng-invalid')]");
+        } else {
+            findElementByXpath("//input[@id='nodeLabel' and contains(@class,'ng-valid')]");
+        }
+        findElementByXpath("//div/button[text()='Cancel']").click();
+    }
+
+    private void testRequisitionName(final String requisitionName, final boolean mustFail) throws Exception {
+        provisioningPage();
+        clickId("add-requisition", false);
+
+        wait.until(visibilityOfElementLocated(By.cssSelector("form.bootbox-form > input.bootbox-input")));
+        enterText(By.cssSelector("form.bootbox-form > input.bootbox-input"), requisitionName);
+        findElementByXpath("//div/button[text()='OK']").click();
+
+        if (mustFail) {
+            try {
+                wait.until(visibilityOfElementLocated(By.xpath("//div[contains(@class, 'modal-dialog')]")));
+                findElementByXpath("//div/button[text()='OK']").click();
+            } catch (final Exception e) {
+                LOG.debug("Got an exception waiting for a 'invalid requisition name' alert.", e);
+                throw e;
+            }
+        } else {
+            wait.until(visibilityOfElementLocated(By.xpath("//td[text()='" + requisitionName + "']")));
+        }
     }
 }
