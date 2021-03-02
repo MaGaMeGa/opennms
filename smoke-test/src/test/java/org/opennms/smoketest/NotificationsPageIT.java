@@ -29,15 +29,26 @@
 package org.opennms.smoketest;
 
 import static org.junit.Assert.assertEquals;
+import static org.openqa.selenium.support.ui.ExpectedConditions.visibilityOfElementLocated;
+
+import java.time.Duration;
+import java.time.temporal.ChronoUnit;
 
 import org.junit.Before;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
+import org.openqa.selenium.Alert;
 import org.openqa.selenium.By;
+import org.openqa.selenium.support.ui.ExpectedConditions;
+import org.openqa.selenium.support.ui.Select;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
 public class NotificationsPageIT extends OpenNMSSeleniumIT {
+    private static final Logger LOG = LoggerFactory.getLogger(NotificationsPageIT.class);
+
     @Before
     public void setUp() throws Exception {
         notificationsPage();
@@ -87,4 +98,42 @@ public class NotificationsPageIT extends OpenNMSSeleniumIT {
         assertElementDoesNotHaveText(By.xpath("//span[@class='label label-default']"), "admin was notified [-]");
     }
 
+    @Test
+    public void testIllegalNames() {
+        testIllegalName("<b>bad</b>Name", true);
+        testIllegalName("bad\"Name", true);
+        testIllegalName("bad'Name", true);
+        testIllegalName("bad&Name", true);
+        testIllegalName("goodName", false);
+    }
+
+    private void testIllegalName(final String name, final boolean mustFail) {
+        adminPage();
+        findElementByLink("Configure Notifications").click();
+        findElementByXpath("//a[contains(text(),'Configure Event Notifications')]").click();
+        findElementByXpath("//button[@onclick='javascript:newNotice()']").click();
+        final Select select = new Select(driver.findElement(By.id("uei")));
+        select.selectByValue("uei.opennms.org/alarms/clear");
+        findElementByXpath("//a[contains(text(),'Next ›››')]").click();
+        findElementByXpath("//a[contains(text(),'Skip results validation')]").click();
+        enterText(By.xpath("//input[@name='name']"), name);
+        enterText(By.xpath("//input[@name='description']"), "description");
+        enterText(By.xpath("//textarea[@name='textMsg']"), "textMsg");
+        findElementByXpath("//a[contains(text(),'Finish')]").click();
+
+        if (mustFail) {
+            try {
+                final Alert alert = wait.withTimeout(Duration.of(5, ChronoUnit.SECONDS)).until(ExpectedConditions.alertIsPresent());
+                alert.dismiss();
+            } catch (final Exception e) {
+                LOG.debug("Got an exception waiting for a 'invalid name' alert.", e);
+                throw e;
+            }
+        } else {
+            wait.until(visibilityOfElementLocated(By.xpath("//h4[text()='Event Notifications']")));
+            findElementByXpath("//input[@onclick=\"javascript:deleteNotice('"+name+"')\"]").click();
+            final Alert alert = wait.withTimeout(Duration.of(5, ChronoUnit.SECONDS)).until(ExpectedConditions.alertIsPresent());
+            alert.accept();
+        }
+    }
 }

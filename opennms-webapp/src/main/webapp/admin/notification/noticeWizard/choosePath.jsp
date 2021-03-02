@@ -94,6 +94,11 @@
     
     function finish()
     {
+        if (/.*[&<>"`']+.*/.test(document.info.name.value)) {
+            alert("The name must not contain any HTML markup.");
+            return;
+        }
+
         trimmedName = trimString(document.info.name.value);
         trimmedText = trimString(document.info.textMsg.value);
         if (trimmedName=="")
